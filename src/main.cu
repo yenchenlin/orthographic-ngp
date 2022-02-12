@@ -103,6 +103,13 @@ int main(int argc, char** argv) {
 		{'v', "version"},
 	};
 
+	Flag inerf_flag{
+		parser,
+		"INERF",
+		"Run iNeRF.",
+		{"inerf"},
+	};
+
 	// Parse command line arguments and react to parsing
 	// errors using exceptions.
 	try {
@@ -165,6 +172,17 @@ int main(int argc, char** argv) {
 		}
 
 		Testbed testbed{mode};
+
+		if (inerf_flag) {
+			tlog::info() << "WARNING: iNeRF fixes NeRF's parameters.";
+			if (!snapshot_flag) {
+				tlog::error() << "Please specify --snapshot PATH/TO/SNAPSHOT.";
+				return 1;
+			}
+			testbed.m_train_encoding = false;
+			testbed.m_train_network = false;
+			testbed.m_nerf.training.optimize_extrinsics = true;
+		}
 
 		if (scene_flag) {
 			fs::path scene_path = get(scene_flag);
