@@ -19,11 +19,8 @@
 #include <neural-graphics-primitives/nerf_loader.h>
 #include <neural-graphics-primitives/nerf_network.h>
 #include <neural-graphics-primitives/render_buffer.h>
-#include <neural-graphics-primitives/takikawa_encoding.cuh>
 #include <neural-graphics-primitives/testbed.h>
 #include <neural-graphics-primitives/trainable_buffer.cuh>
-#include <neural-graphics-primitives/triangle_bvh.cuh>
-#include <neural-graphics-primitives/triangle_octree.cuh>
 
 #include <tiny-cuda-nn/encodings/grid.h>
 #include <tiny-cuda-nn/loss.h>
@@ -100,9 +97,6 @@ void Testbed::load_training_data(const std::string& data_path) {
 
 	switch (m_testbed_mode) {
 		case ETestbedMode::Nerf:  load_nerf(); break;
-		case ETestbedMode::Sdf:   load_mesh(); break;
-		case ETestbedMode::Image: load_image(); break;
-		case ETestbedMode::Volume:load_volume(); break;
 		default: throw std::runtime_error{"Invalid testbed mode."};
 	}
 
@@ -162,28 +156,6 @@ void Testbed::handle_file(const std::string& file) {
 	}
 	else if (ends_with(file, ".json")) {
 		reload_network_from_file(file);
-	} else if (ends_with(file, ".obj")) {
-		m_data_path = file;
-		m_testbed_mode = ETestbedMode::Sdf;
-		load_mesh();
-	} else if (ends_with(file, ".exr") || ends_with(file, ".bin")) {
-		m_data_path = file;
-		m_testbed_mode = ETestbedMode::Image;
-		try {
-			load_image();
-		} catch (std::runtime_error& e) {
-			tlog::error() << "Failed to open image: " << e.what();
-			return;
-		}
-	} else if (ends_with(file, ".nvdb")) {
-		m_data_path = file;
-		m_testbed_mode = ETestbedMode::Volume;
-		try {
-			load_volume();
-		} catch (std::runtime_error& e) {
-			tlog::error() << "Failed to open volume: " << e.what();
-			return;
-		}
 	} else {
 		tlog::error() << "Tried to open unknown file type: " << file;
 	}
@@ -510,10 +482,6 @@ void Testbed::imgui() {
 			accum_reset = true;
 		}
 		accum_reset |= ImGui::SliderFloat("Zoom", &m_zoom, 1.f, 10.f);
-		if (m_testbed_mode == ETestbedMode::Sdf) {
-			accum_reset |= ImGui::Checkbox("Floor", &m_floor_enable);
-			ImGui::SameLine();
-		}
 
 		ImGui::Checkbox("First person controls", &m_fps_camera);
 		ImGui::SameLine();
@@ -553,35 +521,6 @@ void Testbed::imgui() {
 				, m_autofocus ? "True" : "False"
 			);
 
-			if (m_testbed_mode == ETestbedMode::Sdf) {
-				size_t n = strlen(buf);
-				snprintf(buf+n, sizeof(buf)-n,
-					"testbed.sdf.shadow_sharpness = %0.3f\n"
-					"testbed.sdf.analytic_normals = %s\n"
-					"testbed.sdf.use_triangle_octree = %s\n\n"
-					"testbed.sdf.brdf.metallic = %0.3f\n"
-					"testbed.sdf.brdf.subsurface = %0.3f\n"
-					"testbed.sdf.brdf.specular = %0.3f\n"
-					"testbed.sdf.brdf.roughness = %0.3f\n"
-					"testbed.sdf.brdf.sheen = %0.3f\n"
-					"testbed.sdf.brdf.clearcoat = %0.3f\n"
-					"testbed.sdf.brdf.clearcoat_gloss = %0.3f\n"
-					"testbed.sdf.brdf.basecolor = [%0.3f,%0.3f,%0.3f]\n\n"
-					, m_sdf.shadow_sharpness
-					, m_sdf.analytic_normals ? "True" : "False"
-					, m_sdf.use_triangle_octree ? "True" : "False"
-					, m_sdf.brdf.metallic
-					, m_sdf.brdf.subsurface
-					, m_sdf.brdf.specular
-					, m_sdf.brdf.roughness
-					, m_sdf.brdf.sheen
-					, m_sdf.brdf.clearcoat
-					, m_sdf.brdf.clearcoat_gloss
-					, m_sdf.brdf.basecolor.x()
-					, m_sdf.brdf.basecolor.y()
-					, m_sdf.brdf.basecolor.z()
-				);
-			}
 			ImGui::InputTextMultiline("Params", buf, sizeof(buf));
 			ImGui::TreePop();
 		}
@@ -685,49 +624,6 @@ void Testbed::imgui() {
 				ImGui::SliderFloat("Inflate", &m_mesh.inflate_amount, 0.f, 128.f);
 			}
 		}
-	}
-
-	if (m_testbed_mode == ETestbedMode::Sdf && ImGui::CollapsingHeader("SDF settings")) {
-		accum_reset |= ImGui::Checkbox("Analytic normals", &m_sdf.analytic_normals);
-		ImGui::SameLine();
-		accum_reset |= ImGui::Checkbox("Use octree for acceleration", &m_sdf.use_triangle_octree);
-		accum_reset |= ImGui::SliderFloat("Normals epsilon", &m_sdf.fd_normals_epsilon, 0.00001f, 0.1f, "%.6g", ImGuiSliderFlags_Logarithmic);
-
-		accum_reset |= ImGui::SliderFloat("Shadow sharpness", &m_sdf.shadow_sharpness, 0.1f, 2048.0f, "%.6g", ImGuiSliderFlags_Logarithmic);
-		accum_reset |= ImGui::SliderFloat("Inflate (offset the zero set)", &m_sdf.zero_offset, -0.25f, 0.25f);
-		accum_reset |= ImGui::SliderFloat("Distance scale", &m_sdf.distance_scale, 0.25f, 1.f);
-		accum_reset |= ImGui::Combo("Mesh SDF mode", (int*)&m_sdf.mesh_sdf_mode, MeshSdfModeStr);
-
-		if (ImGui::Checkbox("Calculate IoU", &m_sdf.calculate_iou_online)) {
-			m_sdf.iou_decay = 0;
-		}
-
-		ImGui::SameLine();
-		ImGui::Text("%0.6f", m_sdf.iou);
-	}
-
-	if (m_testbed_mode == ETestbedMode::Image && ImGui::CollapsingHeader("Image settings")) {
-		ImGui::Combo("Training coords", (int*)&m_image.random_mode, RandomModeStr);
-	}
-	if (m_testbed_mode == ETestbedMode::Volume && ImGui::CollapsingHeader("Volume settings")) {
-		accum_reset |= ImGui::SliderFloat("Albedo", &m_volume.albedo, 0.f, 1.f);
-		accum_reset |= ImGui::SliderFloat("Scattering", &m_volume.scattering, -2.f, 2.f);
-		accum_reset |= ImGui::SliderFloat("Distance Scale", &m_volume.inv_distance_scale, 1.f, 100.f, "%.3g", ImGuiSliderFlags_Logarithmic | ImGuiSliderFlags_NoRoundToFormat);
-	}
-
-	if (m_testbed_mode == ETestbedMode::Sdf) {
-		if (ImGui::CollapsingHeader("BRDF parameters")) {
-			accum_reset |= ImGui::ColorEdit3("Base color", (float*)&m_sdf.brdf.basecolor );
-			accum_reset |= ImGui::SliderFloat("Roughness", &m_sdf.brdf.roughness, 0.f, 1.f);
-			accum_reset |= ImGui::SliderFloat("Specular", &m_sdf.brdf.specular, 0.f, 1.f);
-			accum_reset |= ImGui::SliderFloat("Metallic", &m_sdf.brdf.metallic, 0.f, 1.f);
-			ImGui::Separator();
-			accum_reset |= ImGui::SliderFloat("Subsurface", &m_sdf.brdf.subsurface, 0.f, 1.f);
-			accum_reset |= ImGui::SliderFloat("Sheen", &m_sdf.brdf.sheen, 0.f, 1.f);
-			accum_reset |= ImGui::SliderFloat("Clearcoat", &m_sdf.brdf.clearcoat, 0.f, 1.f);
-			accum_reset |= ImGui::SliderFloat("Clearcoat gloss", &m_sdf.brdf.clearcoat_gloss, 0.f, 1.f);
-		}
-		m_sdf.brdf.ambientcolor = (m_background_color * m_background_color).head<3>();
 	}
 
 	if (ImGui::CollapsingHeader("Histograms of trainable encoding parameters")) {
@@ -924,7 +820,6 @@ bool Testbed::keyboard_event() {
 	if (ImGui::IsKeyPressed('T'))
 		set_train(!m_train);
 	if (ImGui::IsKeyPressed('N')) {
-		m_sdf.analytic_normals = !m_sdf.analytic_normals;
 		reset_accumulation();
 	}
 
@@ -1298,10 +1193,7 @@ void Testbed::init_window(int resw, int resh, bool hidden) {
 	glfwWindowHint(GLFW_VISIBLE, hidden ? GLFW_FALSE : GLFW_TRUE);
 	std::string title = "Neural graphics primitives (";
 	switch (m_testbed_mode) {
-		case ETestbedMode::Image: title += "Image"; break;
-		case ETestbedMode::Sdf: title += "SDF"; break;
 		case ETestbedMode::Nerf: title += "NeRF"; break;
-		case ETestbedMode::Volume: title += "Volume"; break;
 	}
 	title += ")";
 	m_glfw_window = glfwCreateWindow(m_window_res.x(), m_window_res.y(), title.c_str(), NULL, NULL);
@@ -1380,10 +1272,6 @@ bool Testbed::frame() {
 #endif
 
 	draw_contents();
-	if (m_testbed_mode == ETestbedMode::Sdf && m_sdf.calculate_iou_online) {
-		m_sdf.iou = calculate_iou(m_train ? 64*64*64 : 128*128*128, m_sdf.iou_decay, false, true);
-		m_sdf.iou_decay = 0.f;
-	}
 
 #ifdef NGP_GUI
 	if (m_render_window) {
@@ -1531,8 +1419,6 @@ ELossType Testbed::string_to_loss_type(const std::string& str) {
 }
 
 void Testbed::reset_network() {
-	m_sdf.iou_decay = 0;
-
 	m_rng = default_rng_t{m_seed};
 
 	// Start with a low rendering resolution and gradually ramp up
@@ -1564,9 +1450,6 @@ void Testbed::reset_network() {
 
 	switch (m_testbed_mode) {
 		case ETestbedMode::Nerf:  n_input_dims = 3; n_output_dims = 4; n_pos_dims = 3; break;
-		case ETestbedMode::Sdf:   n_input_dims = 3; n_output_dims = 1; n_pos_dims = 3; break;
-		case ETestbedMode::Image: n_input_dims = 2; n_output_dims = 3; n_pos_dims = 2; break;
-		case ETestbedMode::Volume:n_input_dims = 3; n_output_dims = 4; n_pos_dims = 3; break;
 		default: throw std::runtime_error{"Invalid mode."};
 	}
 
@@ -1680,47 +1563,7 @@ void Testbed::reset_network() {
 			m_distortion.optimizer.reset(create_optimizer<float>(distortion_map_optimizer_config));
 			m_distortion.trainer = std::make_shared<Trainer<float, float>>(m_distortion.map, m_distortion.optimizer, std::shared_ptr<Loss<float>>{create_loss<float>(loss_config)}, m_seed);
 		}
-	} else {
-		uint32_t alignment = network_config.contains("otype") && (equals_case_insensitive(network_config["otype"], "FullyFusedMLP") || equals_case_insensitive(network_config["otype"], "MegakernelMLP")) ? 16u : 8u;
-
-		if (encoding_config.contains("otype") && equals_case_insensitive(encoding_config["otype"], "Takikawa")) {
-			if (m_sdf.octree_depth_target == 0)
-				m_sdf.octree_depth_target = encoding_config["n_levels"];
-			if (!m_sdf.triangle_octree || m_sdf.triangle_octree->depth() != m_sdf.octree_depth_target) {
-				m_sdf.triangle_octree.reset(new TriangleOctree{});
-				m_sdf.triangle_octree->build(*m_sdf.triangle_bvh, m_sdf.triangles_cpu, m_sdf.octree_depth_target);
-				m_sdf.octree_depth_target = m_sdf.triangle_octree->depth();
-			}
-
-			m_encoding.reset(new TakikawaEncoding<precision_t>(
-				encoding_config["starting_level"],
-				encoding_config["sum_instead_of_concat"],
-				m_sdf.triangle_octree,
-				tcnn::string_to_interpolation_type(encoding_config.value("interpolation", "linear"))
-			));
-
-			m_network = std::make_shared<NetworkWithInputEncoding<precision_t>>(m_encoding, n_output_dims, network_config);
-			m_sdf.uses_takikawa_encoding = true;
-		} else {
-			m_encoding.reset(create_encoding<precision_t>(n_input_dims, encoding_config));
-			m_network = std::make_shared<NetworkWithInputEncoding<precision_t>>(m_encoding, n_output_dims, network_config);
-			m_sdf.uses_takikawa_encoding = false;
-			if (m_sdf.octree_depth_target == 0 && encoding_config.contains("n_levels")) {
-				m_sdf.octree_depth_target = encoding_config["n_levels"];
-			}
-		}
-
-		n_encoding_params = m_encoding->n_params();
-
-		tlog::info()
-			<< "Model:         " << n_input_dims
-			<< "--[" << std::string(encoding_config["otype"])
-			<< "]-->" << m_encoding->num_encoded_dims()
-			<< "--[" << std::string(network_config["otype"])
-			<< "(neurons=" << (int)network_config["n_neurons"] << ",layers=" << ((int)network_config["n_hidden_layers"]+2) << ")"
-			<< "]-->" << n_output_dims;
 	}
-
 	size_t n_network_params = m_network->n_params() - n_encoding_params;
 
 	tlog::info() << "  total_encoding_params=" << n_encoding_params << " total_network_params=" << n_network_params;
@@ -1819,9 +1662,6 @@ void Testbed::train(uint32_t n_training_steps, uint32_t batch_size) {
 
 		switch (m_testbed_mode) {
 			case ETestbedMode::Nerf:  training_prep_nerf(batch_size, n_training_steps, m_training_stream);  break;
-			case ETestbedMode::Sdf:   training_prep_sdf(batch_size, n_training_steps, m_training_stream);   break;
-			case ETestbedMode::Image: training_prep_image(batch_size, n_training_steps, m_training_stream); break;
-			case ETestbedMode::Volume:training_prep_volume(batch_size, n_training_steps, m_training_stream); break;
 			default: throw std::runtime_error{"Invalid training mode."};
 		}
 
@@ -1845,9 +1685,6 @@ void Testbed::train(uint32_t n_training_steps, uint32_t batch_size) {
 
 		switch (m_testbed_mode) {
 			case ETestbedMode::Nerf:   train_nerf(batch_size, n_training_steps, m_training_stream);   break;
-			case ETestbedMode::Sdf:    train_sdf(batch_size, n_training_steps, m_training_stream);    break;
-			case ETestbedMode::Image:  train_image(batch_size, n_training_steps, m_training_stream);  break;
-			case ETestbedMode::Volume: train_volume(batch_size, n_training_steps, m_training_stream); break;
 			default: throw std::runtime_error{"Invalid training mode."};
 		}
 
@@ -1881,64 +1718,6 @@ void Testbed::render_frame(const Matrix<float, 3, 4>& camera_matrix0, const Matr
 			if (!m_render_ground_truth) {
 				render_nerf(render_buffer, max_res, focal_length, camera_matrix0, camera_matrix1, screen_center, m_inference_stream);
 			}
-			break;
-		case ETestbedMode::Sdf:
-			{
-				distance_fun_t distance_fun =
-					m_render_ground_truth ? (distance_fun_t)[&](uint32_t n_elements, const GPUMemory<Vector3f>& positions, GPUMemory<float>& distances, cudaStream_t stream) {
-						m_sdf.triangle_bvh->signed_distance_gpu(
-							n_elements,
-							m_sdf.mesh_sdf_mode,
-							(Vector3f*)positions.data(),
-							distances.data(),
-							m_sdf.triangles_gpu.data(),
-							false,
-							m_training_stream
-						);
-					} : (distance_fun_t)[&](uint32_t n_elements, const GPUMemory<Vector3f>& positions, GPUMemory<float>& distances, cudaStream_t stream) {
-						if (n_elements == 0) {
-							return;
-						}
-
-						n_elements = next_multiple(n_elements, BATCH_SIZE_MULTIPLE);
-
-						GPUMatrix<float> positions_matrix((float*)positions.data(), 3, n_elements);
-						GPUMatrix<float> distances_matrix(distances.data(), 1, n_elements);
-						m_network->inference(stream, positions_matrix, distances_matrix);
-					};
-
-				normals_fun_t normals_fun =
-					m_render_ground_truth ? (normals_fun_t)[&](uint32_t n_elements, const GPUMemory<Vector3f>& positions, GPUMemory<Vector3f>& normals, cudaStream_t stream) {
-						// NO-OP. Normals will automatically be populated by raytrace
-					} : (normals_fun_t)[&](uint32_t n_elements, const GPUMemory<Vector3f>& positions, GPUMemory<Vector3f>& normals, cudaStream_t stream) {
-						if (n_elements == 0) {
-							return;
-						}
-
-						n_elements = next_multiple(n_elements, BATCH_SIZE_MULTIPLE);
-
-						GPUMatrix<float> positions_matrix((float*)positions.data(), 3, n_elements);
-						GPUMatrix<float> normals_matrix((float*)normals.data(), 3, n_elements);
-						m_network->input_gradient(stream, 0, positions_matrix, normals_matrix);
-					};
-
-				render_sdf(
-					distance_fun,
-					normals_fun,
-					render_buffer,
-					max_res,
-					focal_length,
-					camera_matrix0,
-					screen_center,
-					m_inference_stream
-				);
-			}
-			break;
-		case ETestbedMode::Image:
-			render_image(render_buffer, m_inference_stream);
-			break;
-		case ETestbedMode::Volume:
-			render_volume(render_buffer, focal_length, camera_matrix0, screen_center, m_inference_stream);
 			break;
 		default:
 			throw std::runtime_error{"Invalid render mode."};

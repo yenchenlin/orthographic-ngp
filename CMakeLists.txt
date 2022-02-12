@@ -213,14 +213,10 @@ set(SOURCES
 	src/nerf_loader.cu
 	src/render_buffer.cu
 	src/testbed.cu
-	src/testbed_image.cu
 	src/testbed_nerf.cu
-	src/testbed_sdf.cu
-	src/testbed_volume.cu
 	src/thread_pool.cpp
 	src/tinyexr_wrapper.cu
 	src/tinyobj_loader_wrapper.cpp
-	src/triangle_bvh.cu
 )
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
@@ -281,24 +277,3 @@ target_compile_options(ngp PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:${CUDA_NVCC_FLAGS}
 add_executable(testbed src/main.cu)
 target_link_libraries(testbed PUBLIC ngp)
 target_compile_options(testbed PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:${CUDA_NVCC_FLAGS}>)
-
-if (Python_FOUND)
-	add_library(pyngp SHARED src/python_api.cu)
-	set_target_properties(pyngp PROPERTIES CXX_VISIBILITY_PRESET "hidden")
-	set_target_properties(pyngp PROPERTIES CUDA_VISIBILITY_PRESET "hidden")
-	target_link_libraries(pyngp PUBLIC ngp ${PYTHON_LIBRARIES} pybind11::module)
-	target_compile_options(pyngp PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:${CUDA_NVCC_FLAGS}>)
-	target_compile_definitions(pyngp PUBLIC -DNGP_PYTHON)
-	pybind11_extension(pyngp)
-
-	if (MSVC)
-		# Copy dlls needed at runtime
-		file(GLOB CUBLAS_DLLS "${CUDA_COMPILER_BIN}/cublas*.dll")
-		if (CUBLAS_DLLS)
-			add_custom_command(TARGET pyngp POST_BUILD
-				COMMAND ${CMAKE_COMMAND} -E copy ${CUBLAS_DLLS} $<TARGET_FILE_DIR:pyngp>
-				COMMAND_EXPAND_LISTS
-			)
-		endif()
-	endif()
-endif()

@@ -21,7 +21,6 @@
 #include <neural-graphics-primitives/nerf.h>
 #include <neural-graphics-primitives/nerf_loader.h>
 #include <neural-graphics-primitives/render_buffer.h>
-#include <neural-graphics-primitives/sdf.h>
 #include <neural-graphics-primitives/trainable_buffer.cuh>
 
 #include <tiny-cuda-nn/cuda_graph.h>
@@ -67,46 +66,6 @@ public:
 
 	using distance_fun_t = std::function<void(uint32_t, const tcnn::GPUMemory<Eigen::Vector3f>&, tcnn::GPUMemory<float>&, cudaStream_t)>;
 	using normals_fun_t = std::function<void(uint32_t, const tcnn::GPUMemory<Eigen::Vector3f>&, tcnn::GPUMemory<Eigen::Vector3f>&, cudaStream_t)>;
-
-	class SphereTracer {
-	public:
-		SphereTracer() : m_hit_counter(1), m_alive_counter(1) {}
-
-		void init_rays_from_camera(
-			uint32_t spp,
-			const Eigen::Vector2i& resolution,
-			const Eigen::Vector2f& focal_length,
-			const Eigen::Matrix<float, 3, 4>& camera_matrix,
-			const Eigen::Vector2f& screen_center,
-			bool snap_to_pixel_centers,
-			const BoundingBox& aabb,
-			float floor_y,
-			float plane_z,
-			float dof,
-			const float* envmap_data,
-			const Eigen::Vector2i& envmap_resolution,
-			Eigen::Array4f* frame_buffer,
-			const TriangleOctree* octree, cudaStream_t stream
-		);
-
-		void init_rays_from_data(uint32_t n_elements, const RaysSdfSoa& data, cudaStream_t stream);
-		uint32_t trace_bvh(TriangleBvh* bvh, const Triangle* triangles, cudaStream_t stream);
-		uint32_t trace(const distance_fun_t& distance_function, float zero_offset, float distance_scale, const BoundingBox& aabb, const float floor_y, const TriangleOctree* octree, cudaStream_t stream);
-		void enlarge(size_t n_elements);
-		RaysSdfSoa& rays_hit() { return m_rays_hit; }
-		RaysSdfSoa& rays_init() { return m_rays[0];	}
-		uint32_t n_rays_initialized() const { return m_n_rays_initialized; }
-		void set_trace_shadow_rays(bool val) { m_trace_shadow_rays = val; }
-		void set_shadow_sharpness(float val) { m_shadow_sharpness = val; }
-	private:
-		RaysSdfSoa m_rays[2];
-		RaysSdfSoa m_rays_hit;
-		tcnn::GPUMemory<uint32_t> m_hit_counter;
-		tcnn::GPUMemory<uint32_t> m_alive_counter;
-		uint32_t m_n_rays_initialized = 0;
-		float m_shadow_sharpness = 8.0f;
-		bool m_trace_shadow_rays = false;
-	};
 
 	class NerfTracer {
 	public:
@@ -534,56 +493,6 @@ public:
 
 		float rendering_min_alpha = 0.01f;
 	} m_nerf;
-
-	struct Sdf {
-		SphereTracer tracer;
-		SphereTracer shadow_tracer;
-		float shadow_sharpness = 2048.0f;
-
-		bool groundtruth_spheremarch = false;
-
-		BRDFParams brdf;
-
-		FiniteDifferenceNormalsApproximator fd_normals;
-		float fd_normals_epsilon = 0.0005f;
-
-		// Mesh data
-		EMeshSdfMode mesh_sdf_mode = EMeshSdfMode::Raystab;
-		float mesh_scale;
-
-		tcnn::GPUMemory<Triangle> triangles_gpu;
-		std::vector<Triangle> triangles_cpu;
-		std::vector<float> triangle_weights;
-		DiscreteDistribution triangle_distribution;
-		tcnn::GPUMemory<float> triangle_cdf;
-		std::shared_ptr<TriangleBvh> triangle_bvh; // unique_ptr
-
-		bool uses_takikawa_encoding = false;
-		bool use_triangle_octree = false;
-		int octree_depth_target = 0; // we duplicate this state so that you can waggle the slider without triggering it immediately
-		std::shared_ptr<TriangleOctree> triangle_octree;
-
-		bool analytic_normals = false;
-		float zero_offset = 0;
-		float distance_scale = 0.95f;
-
-		double iou = 0.0;
-		float iou_decay = 0.0f;
-		bool calculate_iou_online = false;
-		tcnn::GPUMemory<uint32_t> iou_counter;
-		struct Training {
-			size_t idx = 0;
-			size_t size = 0;
-			size_t max_size = 1 << 24;
-			bool did_generate_more_training_data = false;
-			bool generate_sdf_data_online = true;
-			tcnn::GPUMemory<Eigen::Vector3f> positions;
-			tcnn::GPUMemory<Eigen::Vector3f> positions_shuffled;
-			tcnn::GPUMemory<float> distances;
-			tcnn::GPUMemory<float> distances_shuffled;
-			tcnn::GPUMemory<Eigen::Vector3f> perturbations;
-		} training = {};
-	} m_sdf;
 
 	enum EDataType {
 		Float,
