@@ -2070,7 +2070,7 @@ void Testbed::update_nerf_focal_lengths() {
 void Testbed::update_nerf_transforms() {
 	m_nerf.training.transforms.resize(m_nerf.training.n_images);
 	for (uint32_t i = 0; i < m_nerf.training.n_images; ++i) {
-		auto xform = m_nerf.training.dataset.xforms[i];
+		auto xform = m_nerf.training.transforms[i];
 
 		Vector3f rot = m_nerf.training.cam_rot_offset[i].variable();
 		float angle = rot.norm();
@@ -2083,7 +2083,6 @@ void Testbed::update_nerf_transforms() {
 
 		m_nerf.training.transforms[i] = xform;
 	}
-
 	m_nerf.training.transforms_gpu.resize_and_copy_from_host(m_nerf.training.transforms);
 }
 
@@ -2143,14 +2142,23 @@ void Testbed::load_nerf() {
 	// starting from the distortion that's described by the training data.
 	// m_nerf.training.dataset.camera_distortion = {};
 
-	// Perturbation of the training cameras -- for debugging the online extrinsics learning code
-	// for (uint32_t i = 0; i < m_nerf.training.n_images; ++i) {
-	// 	Vector3f rot = random_val_3d(i+1) * 0.01f;
-	// 	float angle = rot.norm();
-	// 	rot /= angle;
-	// 	m_nerf.training.dataset.xforms[i].block<3,3>(0,0) = AngleAxisf(angle, rot).matrix() * m_nerf.training.dataset.xforms[i].block<3,3>(0,0);
-	// 	m_nerf.training.dataset.xforms[i].col(3) += random_val_3d(i+1+m_nerf.training.n_images) * 0.01f;
-	// }
+	// Init the training cameras.
+	m_nerf.training.transforms.resize(m_nerf.training.n_images);
+	for (uint32_t i = 0; i < m_nerf.training.n_images; ++i) {
+		auto xform = m_nerf.training.dataset.xforms[i];
+		m_nerf.training.transforms[i] = xform;
+	}
+	m_nerf.training.transforms_gpu.resize_and_copy_from_host(m_nerf.training.transforms);
+
+	// Perturb the training cameras.
+	for (uint32_t i = 0; i < m_nerf.training.n_images; ++i) {
+		Vector3f rot = random_val_3d(m_rng) * 0.01f;
+		float angle = rot.norm();
+		rot /= angle;
+		m_nerf.training.transforms[i].block<3,3>(0,0) = AngleAxisf(angle, rot).matrix() * m_nerf.training.transforms[i].block<3,3>(0,0);
+		m_nerf.training.transforms[i].col(3) += random_val_3d(m_rng) * 0.01f;
+	}
+	m_nerf.training.transforms_gpu.resize_and_copy_from_host(m_nerf.training.transforms);
 
 	update_nerf_transforms();
 
