@@ -327,6 +327,20 @@ void Testbed::imgui() {
 			ImGui::SameLine();
 			ImGui::Checkbox("Train distortion", &m_nerf.training.optimize_distortion);
 		}
+		if (ImGui::Button("Perturb cameras")) {
+			for (uint32_t i = 0; i < m_nerf.training.n_images; ++i) {
+				// Vector3f rot = 
+				// float angle = rot.norm();
+				// rot /= angle;
+				// Eigen::Matrix3f mat = AngleAxisf(angle, rot).matrix();
+				// Eigen::AngleAxisf result;
+				// result.fromRotationMatrix(mat);
+				// m_nerf.training.cam_rot_offset[i].variable() = random_val_3d(m_rng) * 0.05f;
+				// m_nerf.training.cam_rot_offset[i].variable() = random_val_3d(m_rng) * 0.01f;
+				m_nerf.training.cam_pos_offset[i].variable() = random_val_3d(m_rng) * 0.01f;
+				update_nerf_transforms();
+			}
+		}
 		if (imgui_colored_button("Reset training", 0.f)) {
 			reload_network_from_file("");
 		}
