@@ -225,6 +225,44 @@ inline __host__ __device__ Ray pixel_to_ray_pinhole(
 	return {origin, dir};
 }
 
+inline __host__ __device__ Ray pixel_to_ray_orthographic(
+	uint32_t spp,
+	const Eigen::Vector2i& pixel,
+	const Eigen::Vector2i& resolution,
+	const Eigen::Vector2f& focal_length,
+	const Eigen::Matrix<float, 3, 4>& camera_matrix,
+	const Eigen::Vector2f& screen_center,
+	float focus_z = 1.0f,
+	float dof = 0.0f
+) {
+	auto uv = pixel.cast<float>().cwiseQuotient(resolution.cast<float>());
+
+	Eigen::Vector3f dir = {
+		0.0f,
+		0.0f,
+		1.0f
+	};
+	dir = camera_matrix.block<3, 3>(0, 0) * dir;
+
+	Eigen::Vector3f offset_x = {
+		(uv.x() - screen_center.x()) * (float)resolution.x() / focal_length.x(),
+		0.0f,
+		0.0f
+	};
+	offset_x = camera_matrix.block<3, 3>(0, 0) * offset_x;
+	Eigen::Vector3f offset_y = {
+		0.0f,
+		(uv.y() - screen_center.y()) * (float)resolution.y() / focal_length.y(),
+		0.0f
+	};
+	offset_y = camera_matrix.block<3, 3>(0, 0) * offset_y;
+
+	Eigen::Vector3f origin = camera_matrix.col(3);
+	origin = origin + offset_x + offset_y;
+
+	return {origin, dir};
+}
+
 inline __host__ __device__ Ray pixel_to_ray(
 	uint32_t spp,
 	const Eigen::Vector2i& pixel,
