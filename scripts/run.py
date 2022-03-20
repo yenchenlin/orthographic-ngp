@@ -35,7 +35,10 @@ def parse_args():
 	parser.add_argument("--scene", "--training_data", default="", help="The scene to load. Can be the scene's name or a full path to the training data.")
 	parser.add_argument("--mode", default="", const="nerf", nargs="?", choices=["nerf", "sdf", "image", "volume"], help="Mode can be 'nerf', 'sdf', or 'image' or 'volume'. Inferred from the scene if unspecified.")
 	parser.add_argument("--depth", action="store_true", help="Render the depth instead of RGB.")
-	parser.add_argument("--depth_fname", default="", help="Which path to save rendered depth.")
+	
+	parser.add_argument("--nerfporter", action="store_true", help="Output for NeRF-porter.")
+	parser.add_argument("--nerfporter_color_path", default="", help="Which path to save rendered RGB.")
+	parser.add_argument("--nerfporter_depth_path", default="", help="Which path to save rendered depth.")
 
 	parser.add_argument("--network", default="", help="Path to the network config. Uses the scene's default if unspecified.")
 
@@ -106,10 +109,7 @@ if __name__ == "__main__":
 		network = os.path.join(configs_dir, network)
 
 
-	testbed = ngp.Testbed(mode)
-	if args.mode == "nerf":
-		if args.depth:
-			testbed.render_mode = ngp.RenderMode.Depth
+	testbed = ngp.Testbed(mode)			
 	testbed.nerf.sharpen = float(args.sharpen)
 
 	if args.mode == "sdf":
@@ -305,9 +305,10 @@ if __name__ == "__main__":
 			if not args.screenshot_frames:
 				args.screenshot_frames = range(len(ref_transforms["frames"]))
 			
-			if args.depth:
-				os.makedirs(os.path.dirname(args.depth_fname), exist_ok=True)
-				depths = []
+			# if args.depth:
+			# 	os.makedirs(os.path.dirname(args.depth_fname), exist_ok=True)
+			# 	depths = []
+
 			for idx in args.screenshot_frames:
 				f = ref_transforms["frames"][int(idx)]
 				cam_matrix = f["transform_matrix"]
@@ -317,19 +318,25 @@ if __name__ == "__main__":
 				# Some NeRF datasets lack the .png suffix in the dataset metadata
 				if not os.path.splitext(outname)[1]:
 					outname = outname + ".png"
+				
+				if args.nerfporter: 
+					print(f"Rendering {args.nerfporter_color_path}")
+					image = testbed.render(args.width or int(ref_transforms["w"]), args.height or int(ref_transforms["h"]), args.screenshot_spp, True)
+					os.makedirs(os.path.dirname(args.nerfporter_color_path), exist_ok=True)
+					write_image(args.nerfporter_color_path, image)
 
-				print(f"rendering {outname}")
-				image = testbed.render(args.width or int(ref_transforms["w"]), args.height or int(ref_transforms["h"]), args.screenshot_spp, True)
-				if args.depth:
-					depths.append(image[..., 0])  # Just use the first channel.
-					continue
-				os.makedirs(os.path.dirname(outname), exist_ok=True)
-				write_image(outname, image)
+					print(f"Rendering {args.nerfporter_depth_path}")
+					testbed.render_mode = ngp.RenderMode.Depth
+					depth = testbed.render(args.width or int(ref_transforms["w"]), args.height or int(ref_transforms["h"]), args.screenshot_spp, True)
+					depth = depth[..., 0]  # Just use the first channel.
+					os.makedirs(os.path.dirname(args.nerfporter_depth_path), exist_ok=True)
+					np.save(args.nerfporter_depth_path, depth)
+						# depths.append(image[..., 0])  # Just use the first channel.
 			
-			if args.depth:
-				import tensorflow as tf
-				with tf.io.gfile.GFile(args.depth_fname, 'wb') as f:
-					pickle.dump(np.asarray([depths]), f)
+			# if args.depth:
+			# 	import tensorflow as tf
+			# 	with tf.io.gfile.GFile(args.depth_fname, 'wb') as f:
+			# 		pickle.dump(np.asarray([depths]), f)
 
 		elif args.screenshot_dir:
 			outname = os.path.join(args.screenshot_dir, args.scene + "_" + network_stem)
