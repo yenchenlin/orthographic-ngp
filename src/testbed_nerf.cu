@@ -1615,20 +1615,30 @@ __global__ void init_rays_with_payload_kernel_nerf(
 	}
 
 	float ray_time = ld_random_val(spp, idx*72239731);
-	Ray ray = pixel_to_ray(
+	Ray ray = pixel_to_ray_orthographic(
 		spp,
 		{x, y},
 		resolution,
 		focal_length,
 		camera_matrix0 * ray_time + camera_matrix1 * (1.f - ray_time),
 		screen_center,
-		snap_to_pixel_centers,
 		plane_z,
-		dof,
-		camera_distortion,
-		distortion_data,
-		distortion_resolution
+		dof
 	);
+	// Ray ray = pixel_to_ray(
+	// 	spp,
+	// 	{x, y},
+	// 	resolution,
+	// 	focal_length,
+	// 	camera_matrix0 * ray_time + camera_matrix1 * (1.f - ray_time),
+	// 	screen_center,
+	// 	snap_to_pixel_centers,
+	// 	plane_z,
+	// 	dof,
+	// 	camera_distortion,
+	// 	distortion_data,
+	// 	distortion_resolution
+	// );
 
 	if (plane_z < 0) {
 		float n = ray.d.norm();
