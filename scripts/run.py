@@ -24,7 +24,7 @@ from scenes import scenes_nerf, scenes_image, scenes_sdf, scenes_volume, setup_c
 
 from tqdm import tqdm
 
-pyngp_path = '/home/yenchenl/Workspace/instant-ngp/build/'
+pyngp_path = '/home/yenchenl/Workspace/mini-ngp/build/'
 sys.path.append(pyngp_path)
 import pyngp as ngp # noqa
 
