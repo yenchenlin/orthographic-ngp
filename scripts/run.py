@@ -37,8 +37,8 @@ def parse_args():
 	parser.add_argument("--depth", action="store_true", help="Render the depth instead of RGB.")
 	
 	parser.add_argument("--nerfporter", action="store_true", help="Output for NeRF-porter.")
-	parser.add_argument("--nerfporter_color_path", default="", help="Which path to save rendered RGB.")
-	parser.add_argument("--nerfporter_depth_path", default="", help="Which path to save rendered depth.")
+	parser.add_argument("--nerfporter_color_dir", default="", help="Which directory to save rendered RGB.")
+	parser.add_argument("--nerfporter_depth_dir", default="", help="Which directory to save rendered depth.")
 
 	parser.add_argument("--network", default="", help="Path to the network config. Uses the scene's default if unspecified.")
 
@@ -202,6 +202,7 @@ if __name__ == "__main__":
 
 	if args.save_snapshot:
 		print("Saving snapshot ", args.save_snapshot)
+		os.makedirs(os.path.dirname(args.save_snapshot), exist_ok=True)
 		testbed.save_snapshot(args.save_snapshot, False)
 
 	if args.test_transforms:
@@ -304,10 +305,6 @@ if __name__ == "__main__":
 			testbed.fov = ref_transforms["camera_angle_x"] * 180 / np.pi
 			if not args.screenshot_frames:
 				args.screenshot_frames = range(len(ref_transforms["frames"]))
-			
-			# if args.depth:
-			# 	os.makedirs(os.path.dirname(args.depth_fname), exist_ok=True)
-			# 	depths = []
 
 			for idx in args.screenshot_frames:
 				f = ref_transforms["frames"][int(idx)]
@@ -319,18 +316,36 @@ if __name__ == "__main__":
 				if not os.path.splitext(outname)[1]:
 					outname = outname + ".png"
 				
-				if args.nerfporter: 
-					print(f"Rendering {args.nerfporter_color_path}")
+				if args.nerfporter:
+					testbed.render_mode = ngp.RenderMode.Shade
+					nerfporter_color_path = os.path.join(args.nerfporter_color_dir, f'{idx:06}.png')
+					print(f"Rendering {nerfporter_color_path}")
 					image = testbed.render(args.width or int(ref_transforms["w"]), args.height or int(ref_transforms["h"]), args.screenshot_spp, True)
-					os.makedirs(os.path.dirname(args.nerfporter_color_path), exist_ok=True)
-					write_image(args.nerfporter_color_path, image)
+					os.makedirs(os.path.dirname(nerfporter_color_path), exist_ok=True)
+					write_image(nerfporter_color_path, image)
 
-					print(f"Rendering {args.nerfporter_depth_path}")
 					testbed.render_mode = ngp.RenderMode.Depth
+					nerfporter_depth_path = os.path.join(args.nerfporter_depth_dir, f'{idx:06}.npy')
+					print(f"Rendering {nerfporter_depth_path}")
 					depth = testbed.render(args.width or int(ref_transforms["w"]), args.height or int(ref_transforms["h"]), args.screenshot_spp, True)
 					depth = depth[..., 0]  # Just use the first channel.
-					os.makedirs(os.path.dirname(args.nerfporter_depth_path), exist_ok=True)
-					np.save(args.nerfporter_depth_path, depth)
+					os.makedirs(os.path.dirname(nerfporter_depth_path), exist_ok=True)
+					np.save(nerfporter_depth_path, depth)
+				else:
+					testbed.render_mode = ngp.RenderMode.Shade
+					print(f"Rendering {outname}")
+					image = testbed.render(args.width or int(ref_transforms["w"]), args.height or int(ref_transforms["h"]), args.screenshot_spp, True)
+					os.makedirs(os.path.dirname(outname), exist_ok=True)
+					write_image(outname, image)
+
+					testbed.render_mode = ngp.RenderMode.Depth
+					outname = outname.replace('png', 'npy')
+					print(f"Rendering {outname}")
+					depth = testbed.render(args.width or int(ref_transforms["w"]), args.height or int(ref_transforms["h"]), args.screenshot_spp, True)
+					depth = depth[..., 0]  # Just use the first channel.
+					os.makedirs(os.path.dirname(outname), exist_ok=True)
+					np.save(outname, depth)
+
 						# depths.append(image[..., 0])  # Just use the first channel.
 			
 			# if args.depth:
