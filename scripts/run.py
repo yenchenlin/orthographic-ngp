@@ -47,6 +47,7 @@ def parse_args():
 
 	parser.add_argument("--nerf_compatibility", action="store_true", help="Matches parameters with original NeRF. Can cause slowness and worse results on some scenes.")
 	parser.add_argument("--test_transforms", default="", help="Path to a nerf style transforms json from which we will compute PSNR.")
+	parser.add_argument("--near_distance", default=-1, type=float, help="set the distance from the camera at which training rays start for nerf. <0 means use ngp default")
 
 	parser.add_argument("--screenshot_transforms", default="", help="Path to a nerf style transforms.json from which to save screenshots.")
 	parser.add_argument("--screenshot_frames", nargs="*", help="Which frame(s) to take screenshots of.")
@@ -114,7 +115,9 @@ if __name__ == "__main__":
 
 	if args.mode == "sdf":
 		testbed.tonemap_curve = ngp.TonemapCurve.ACES
-
+	if args.near_distance >= 0.0:
+		print("NeRF training ray near_distance ", args.near_distance)
+		testbed.nerf.training.near_distance = args.near_distance
 	if args.scene:
 		scene=args.scene
 		if not os.path.exists(args.scene) and args.scene in scenes:
