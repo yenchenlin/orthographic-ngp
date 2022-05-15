@@ -1,6 +1,9 @@
 # Instant Neural Graphics Primitives ![](https://github.com/NVlabs/instant-ngp/workflows/CI/badge.svg)
 
-<img src="docs/assets_readme/fox.gif" height="342"/> <img src="docs/assets_readme/robot5.gif" height="342"/>
+<p float="left">
+<img src="https://user-images.githubusercontent.com/7057863/168452871-639f473c-dc34-4feb-889d-40560f2d2893.png" alt="drawing" width="200"/>
+<img src="https://user-images.githubusercontent.com/7057863/168452868-1a71d417-60e7-49bf-9b10-8105a7899f8f.png" alt="drawing" width="200"/>
+</p>
 
 Ever wanted to train a NeRF model of a fox in under 5 seconds? Or fly around a scene captured from photos of a factory robot? Of course you have!
 
@@ -88,8 +91,6 @@ One test scene is provided in this repository, using a small number of frames fr
 ```sh
 bash scripts/demo.sh
 ```
-
-<img src="docs/assets_readme/fox.png"/>
 
 You should be able to see rendered RGB-D images in `./output/fox/`.
 
