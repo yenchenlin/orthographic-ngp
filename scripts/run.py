@@ -176,7 +176,6 @@ if __name__ == "__main__":
 		# testbed.background_color = [1.0, 1.0, 1.0, 1.0]
 		# testbed.nerf.training.random_bg_color = False
 
-
 	old_training_step = 0
 	n_steps = args.n_steps
 	if n_steps < 0:
@@ -302,52 +301,53 @@ if __name__ == "__main__":
 		print(f"Generating mesh via marching cubes and saving to {args.save_mesh}. Resolution=[{res},{res},{res}]")
 		testbed.compute_and_save_marching_cubes_mesh(args.save_mesh, [res, res, res])
 
-	if args.width:
-		if ref_transforms:
-			testbed.fov_axis = 0
-			testbed.fov = ref_transforms["camera_angle_x"] * 180 / np.pi
-			if not args.screenshot_frames:
-				args.screenshot_frames = range(len(ref_transforms["frames"]))
+	if ref_transforms:
+		testbed.fov_axis = 0
+		testbed.fov = ref_transforms["camera_angle_x"] * 180 / np.pi
+		if not args.screenshot_frames:
+			args.screenshot_frames = range(len(ref_transforms["frames"]))
 
-			for idx in args.screenshot_frames:
-				f = ref_transforms["frames"][int(idx)]
-				cam_matrix = f["transform_matrix"]
-				testbed.set_nerf_camera_matrix(np.matrix(cam_matrix)[:-1,:])
-				outname = os.path.join(args.screenshot_dir, os.path.basename(f["file_path"]))
+		for idx in args.screenshot_frames:
+			f = ref_transforms["frames"][int(idx)]
+			cam_matrix = f["transform_matrix"]
+			testbed.set_nerf_camera_matrix(np.matrix(cam_matrix)[:-1,:])
+			outname = os.path.join(args.screenshot_dir, os.path.basename(f["file_path"]))
 
-				# Some NeRF datasets lack the .png suffix in the dataset metadata
-				if not os.path.splitext(outname)[1]:
-					outname = outname + ".png"
-				
-				if args.nerfporter:
-					testbed.render_mode = ngp.RenderMode.Shade
-					nerfporter_color_path = os.path.join(args.nerfporter_color_dir, f'{idx:06}.png')
-					print(f"Rendering {nerfporter_color_path}")
-					image = testbed.render(args.width or int(ref_transforms["w"]), args.height or int(ref_transforms["h"]), args.screenshot_spp, True)
-					os.makedirs(os.path.dirname(nerfporter_color_path), exist_ok=True)
-					write_image(nerfporter_color_path, image)
+			# Some NeRF datasets lack the .png suffix in the dataset metadata
+			if not os.path.splitext(outname)[1]:
+				outname = outname + ".png"
+			
+			if args.nerfporter:
+				testbed.render_mode = ngp.RenderMode.Shade
+				nerfporter_color_path = os.path.join(args.nerfporter_color_dir, f'{idx:06}.png')
+				print(f"Rendering {nerfporter_color_path}")
+				image = testbed.render(args.width or int(ref_transforms["w"]), args.height or int(ref_transforms["h"]), args.screenshot_spp, True)
+				os.makedirs(os.path.dirname(nerfporter_color_path), exist_ok=True)
+				write_image(nerfporter_color_path, image)
 
-					testbed.render_mode = ngp.RenderMode.Depth
-					nerfporter_depth_path = os.path.join(args.nerfporter_depth_dir, f'{idx:06}.npy')
-					print(f"Rendering {nerfporter_depth_path}")
-					depth = testbed.render(args.width or int(ref_transforms["w"]), args.height or int(ref_transforms["h"]), args.screenshot_spp, True)
-					depth = depth[..., 0]  # Just use the first channel.
-					os.makedirs(os.path.dirname(nerfporter_depth_path), exist_ok=True)
-					np.save(nerfporter_depth_path, depth)
-				else:
-					testbed.render_mode = ngp.RenderMode.Shade
-					print(f"Rendering {outname}")
-					image = testbed.render(args.width or int(ref_transforms["w"]), args.height or int(ref_transforms["h"]), args.screenshot_spp, True)
-					os.makedirs(os.path.dirname(outname), exist_ok=True)
-					write_image(outname, image)
+				testbed.render_mode = ngp.RenderMode.Depth
+				# nerfporter_depth_path = os.path.join(args.nerfporter_depth_dir, f'{idx:06}.npy')
+				nerfporter_depth_path = os.path.join(args.nerfporter_depth_dir, f'{idx:06}.png')
+				print(f"Rendering {nerfporter_depth_path}")
+				depth = testbed.render(args.width or int(ref_transforms["w"]), args.height or int(ref_transforms["h"]), args.screenshot_spp, True)
+				depth = depth[..., 0]  # Just use the first channel.
+				os.makedirs(os.path.dirname(nerfporter_depth_path), exist_ok=True)
+				# np.save(nerfporter_depth_path, depth)
+				plt.imsave(nerfporter_depth_path, depth)
+			else:
+				testbed.render_mode = ngp.RenderMode.Shade
+				print(f"Rendering {outname}")
+				image = testbed.render(args.width or int(ref_transforms["w"]), args.height or int(ref_transforms["h"]), args.screenshot_spp, True)
+				os.makedirs(os.path.dirname(outname), exist_ok=True)
+				write_image(outname, image)
 
-					testbed.render_mode = ngp.RenderMode.Depth
-					outname = outname.replace('png', 'npy')
-					print(f"Rendering {outname}")
-					depth = testbed.render(args.width or int(ref_transforms["w"]), args.height or int(ref_transforms["h"]), args.screenshot_spp, True)
-					depth = depth[..., 0]  # Just use the first channel.
-					os.makedirs(os.path.dirname(outname), exist_ok=True)
-					np.save(outname, depth)
+				testbed.render_mode = ngp.RenderMode.Depth
+				outname = outname.replace('png', 'npy')
+				print(f"Rendering {outname}")
+				depth = testbed.render(args.width or int(ref_transforms["w"]), args.height or int(ref_transforms["h"]), args.screenshot_spp, True)
+				depth = depth[..., 0]  # Just use the first channel.
+				os.makedirs(os.path.dirname(outname), exist_ok=True)
+				np.save(outname, depth)
 
 						# depths.append(image[..., 0])  # Just use the first channel.
 			
@@ -356,13 +356,13 @@ if __name__ == "__main__":
 			# 	with tf.io.gfile.GFile(args.depth_fname, 'wb') as f:
 			# 		pickle.dump(np.asarray([depths]), f)
 
-		elif args.screenshot_dir:
-			outname = os.path.join(args.screenshot_dir, args.scene + "_" + network_stem)
-			print(f"Rendering {outname}.png")
-			image = testbed.render(args.width, args.height, args.screenshot_spp, True)
-			if os.path.dirname(outname) != "":
-				os.makedirs(os.path.dirname(outname), exist_ok=True)
-			write_image(outname + ".png", image)
+	elif args.screenshot_dir:
+		outname = os.path.join(args.screenshot_dir, args.scene + "_" + network_stem)
+		print(f"Rendering {outname}.png")
+		image = testbed.render(args.width, args.height, args.screenshot_spp, True)
+		if os.path.dirname(outname) != "":
+			os.makedirs(os.path.dirname(outname), exist_ok=True)
+		write_image(outname + ".png", image)
 
 
 
