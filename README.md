@@ -89,7 +89,11 @@ One test scene is provided in this repository, using a small number of frames fr
 instant-ngp$ ./build/testbed --scene data/nerf/fox
 ```
 
-<img src="docs/assets_readme/fox.png"/>
+<p float="left">
+<img src="https://user-images.githubusercontent.com/7057863/168452871-639f473c-dc34-4feb-889d-40560f2d2893.png" alt="drawing" width="200"/>
+<img src="https://user-images.githubusercontent.com/7057863/168452868-1a71d417-60e7-49bf-9b10-8105a7899f8f.png" alt="drawing" width="200"/>
+</p>
+
 
 Alternatively, download any NeRF-compatible scene (e.g. [from the NeRF authors' drive](https://drive.google.com/drive/folders/1JDdLGDruGNXWnM1eqY1FNL9PlStjaKWi)).
 Now you can run:
