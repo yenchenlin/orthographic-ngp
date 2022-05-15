@@ -86,10 +86,12 @@ This codebase comes with an interactive testbed that includes many features beyo
 One test scene is provided in this repository, using a small number of frames from a casually captured phone video:
 
 ```sh
-instant-ngp$ ./build/testbed --scene data/nerf/fox
+bash scripts/demo.sh
 ```
 
 <img src="docs/assets_readme/fox.png"/>
+
+You should be able to see rendered RGB-D images in `./output/fox/`.
 
 Alternatively, download any NeRF-compatible scene (e.g. [from the NeRF authors' drive](https://drive.google.com/drive/folders/1JDdLGDruGNXWnM1eqY1FNL9PlStjaKWi)).
 Now you can run:
